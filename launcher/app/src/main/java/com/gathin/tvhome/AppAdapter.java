@@ -11,6 +11,11 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Outline;
+import android.widget.FrameLayout;
+import android.view.animation.LinearInterpolator;
+import android.animation.ValueAnimator;
+import android.graphics.Path;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
@@ -312,6 +317,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         h.name.setAlpha(focused ? 1f : 0f);
         h.card.setScaleX(focused ? FOCUS_SCALE : 1f);
         h.card.setScaleY(focused ? FOCUS_SCALE : 1f);
+        h.lightning.setActive(focused);
         if (e.banner != null) {
             h.banner.setImageDrawable(e.banner);
             h.banner.setVisibility(View.VISIBLE);
@@ -489,6 +495,63 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         return 16f * density * Math.min(1f, tileWidthPx / (DESIGN_W_DP * density));
     }
 
+    static final class LightningOverlay extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final float density;
+        private final ValueAnimator animator;
+        private float phase;
+
+        LightningOverlay(Context context) {
+            super(context);
+            density = getResources().getDisplayMetrics().density;
+            setClickable(false);
+            setFocusable(false);
+            setVisibility(View.GONE);
+            animator = ValueAnimator.ofFloat(0f, 1f);
+            animator.setDuration(850);
+            animator.setRepeatCount(ValueAnimator.INFINITE);
+            animator.setInterpolator(new LinearInterpolator());
+            animator.addUpdateListener(a -> {
+                phase = (float) a.getAnimatedValue();
+                invalidate();
+            });
+        }
+
+        void setActive(boolean active) {
+            if (active) {
+                setVisibility(View.VISIBLE);
+                if (!animator.isStarted()) animator.start();
+            } else {
+                animator.cancel();
+                setVisibility(View.GONE);
+            }
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float p = 0.7f + 0.3f * (float)Math.sin(phase * 6.28f);
+            float d = 4f * density;
+            float l = d, t = d, r = getWidth() - d, b = getHeight() - d;
+            if (r <= l || b <= t) return;
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+
+            paint.setColor(Color.argb((int)(65*p), 20, 130, 255));
+            paint.setStrokeWidth(9f*density);
+            canvas.drawRoundRect(l,t,r,b,13*density,13*density,paint);
+
+            paint.setColor(Color.argb((int)(230*p), 30, 160, 255));
+            paint.setStrokeWidth(2.5f*density);
+            canvas.drawRoundRect(l,t,r,b,13*density,13*density,paint);
+
+            paint.setColor(Color.argb((int)(240*p), 190, 235, 255));
+            paint.setStrokeWidth(1f*density);
+            canvas.drawRoundRect(l,t,r,b,13*density,13*density,paint);
+        }
+    }
     static final class Holder extends RecyclerView.ViewHolder {
         final View card;
         final ImageView banner;
@@ -496,6 +559,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         final TextView label;
         final TextView name;
         final boolean reducedMotion;
+        final LightningOverlay lightning;
 
         Holder(View v, TileListener listener, boolean reducedMotion) {
             super(v);
@@ -515,6 +579,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
                 }
             });
             card.setClipToOutline(true);
+            lightning = new LightningOverlay(v.getContext());
+            ((FrameLayout) card).addView(lightning, new FrameLayout.LayoutParams(-1, -1));
 
             card.setOnKeyListener((view, keyCode, event) -> {
                 if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
@@ -525,6 +591,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             });
 
             card.setOnFocusChangeListener((view, focused) -> {
+                lightning.setActive(focused);
                 float s = focused ? FOCUS_SCALE : 1.0f;
                 view.animate().cancel();
                 name.animate().cancel();
@@ -554,3 +621,4 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         }
     }
 }
+
